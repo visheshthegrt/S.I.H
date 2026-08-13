@@ -99,10 +99,15 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
             sat = EarthSatellite.from_omm(ts, row.to_dict())
             satellites.append(sat)
             names.append(row['OBJECT_NAME'])
-        except Exception:
+        except Exception as e:
+            print(f"Failed to load satellite {row.get('OBJECT_NAME', 'UNKNOWN')}: {e}")
             continue
 
     print(f"Loaded {len(satellites)} high-risk objects into the physics engine.")
+    
+    if len(satellites) < 2:
+        print("Not enough valid satellites loaded to compute distances. Exiting gracefully.")
+        return
     print(f"Simulating future collisions ({forecast_minutes} minute forecast)...")
 
     current_time = datetime.datetime.now(datetime.timezone.utc)

@@ -7,8 +7,16 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 import datetime
 import requests
+import sys
 
-def auto_fetch_data():
+def auto_fetch_data(demo_mode=False):
+    if demo_mode:
+        print("\n--- HOLLYWOOD DEMO MODE ACTIVE ---")
+        print("Skipping live CelesTrak telemetry. Loading rigged catalog.")
+        import demo_generator
+        demo_generator.generate_demo_files()
+        return
+
     """Fetches live CSV data from Celestrak for Starlink and the 3 major debris events."""
     print("\n--- INGESTING GLOBAL TELEMETRY ---")
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -28,13 +36,18 @@ def auto_fetch_data():
                     f.write(response.text)
                 print(f"[SUCCESS] Downloaded {filename}")
             else:
-                print(f"[FAILED] HTTP {response.status_code} for {filename}")
+                print(f"[FAILED] HTTP {response.status_code} for {filename} (Using local backup if available)")
         except Exception as e:
             print(f"Failed to fetch {filename}: {e}")
 
-def load_data():
+def load_data(demo_mode=False):
     """Loads all CSVs and returns the Starlink dataframe and a combined Debris dataframe."""
     try:
+        if demo_mode:
+            df_starlink = pd.read_csv('demo_starlink.csv')
+            df_debris_all = pd.read_csv('demo_debris.csv')
+            return df_starlink, df_debris_all
+
         df_starlink = pd.read_csv('starlink.csv')
         df_cosmos = pd.read_csv('cosmos_debris.csv')
         df_iridium = pd.read_csv('iridium_debris.csv')
@@ -59,8 +72,9 @@ def ml_threat_classification(df_starlink, df_debris):
     df_debris['TYPE'] = 'DEBRIS'
     df_all = pd.concat([df_starlink, df_debris], ignore_index=True)
     
-    # We feed the AI the 3 key dimensions of an orbit's shape
-    features = ['MEAN_MOTION', 'ECCENTRICITY', 'INCLINATION']
+    # We feed the AI the key dimensions of an orbit's shape (Altitude and Eccentricity).
+    # We drop INCLINATION so crossing debris is correctly identified as a threat to the Starlink altitude shell.
+    features = ['MEAN_MOTION', 'ECCENTRICITY']
     X = df_all[features].dropna()
     
     # 2. Normalize the data (Standard for Machine Learning)
@@ -83,8 +97,9 @@ def ml_threat_classification(df_starlink, df_debris):
     print(f"AI Filtered Safe Debris: {len(df_debris) - len(threat_debris)}")
     print(f"AI Identified High-Risk Debris: {len(threat_debris)} (Assigned to Cluster {int(starlink_cluster)})")
     
-    # Sample 500 Starlinks for fast processing + the AI-flagged dangerous debris
-    high_risk_objects = pd.concat([df_starlink.sample(n=500, random_state=42), threat_debris])
+    # Simulate merging Starlink data (sampled) with filtered high-risk debris
+    n_sample = min(500, len(df_starlink))
+    high_risk_objects = pd.concat([df_starlink.sample(n=n_sample, random_state=42), threat_debris])
     return high_risk_objects
 
 def run_physics_engine(high_risk_objects, output_path="collision_warnings.json", threshold_km=20.0, forecast_minutes=60):
@@ -108,7 +123,7 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
     if len(satellites) < 2:
         print("Not enough valid satellites loaded to compute distances. Exiting gracefully.")
         return
-    print(f"Simulating future collisions ({forecast_minutes} minute forecast)...")
+    print(f"Simulating future close approaches ({forecast_minutes} minute forecast)...")
 
     current_time = datetime.datetime.now(datetime.timezone.utc)
     collision_events = []
@@ -133,7 +148,9 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
                     "object_2": names[j],
                     "distance_km": round(dist_matrix[i, j], 2),
                     "obj1_x": coords_array[i][0], "obj1_y": coords_array[i][1], "obj1_z": coords_array[i][2],
-                    "obj2_x": coords_array[j][0], "obj2_y": coords_array[j][1], "obj2_z": coords_array[j][2]
+                    "obj2_x": coords_array[j][0], "obj2_y": coords_array[j][1], "obj2_z": coords_array[j][2],
+                    "risk_level": "HIGH" if dist_matrix[i, j] < 10.0 else "MEDIUM",
+                    "event_type": "CLOSE APPROACH"
                 }
                 collision_events.append(event)
                 print(f"⚠️ RISK: {names[i]} vs {names[j]} at {future_time.strftime('%H:%M')} (Distance: {dist_matrix[i,j]:.2f} km)")
@@ -141,16 +158,20 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
     with open(output_path, 'w') as f:
         json.dump(collision_events, f, indent=4)
         
-    print(f"\nSimulation complete! Exported {len(collision_events)} warnings to {output_path}")
+    print(f"\nSimulation complete! Exported {len(collision_events)} close approach warnings to {output_path}")
 
 if __name__ == "__main__":
+    demo_mode = len(sys.argv) > 1 and sys.argv[1] == 'demo'
+    
     print("==================================================")
     print("   SIH PS-33 AI COLLISION RISK ENGINE (GLOBAL)    ")
+    if demo_mode: print("               *** DEMO MODE ***                  ")
     print("==================================================")
     
-    auto_fetch_data()
-    df_starlink, df_debris = load_data()
+    auto_fetch_data(demo_mode)
+    df_starlink, df_debris = load_data(demo_mode)
     
     if df_starlink is not None and df_debris is not None:
         high_risk_subset = ml_threat_classification(df_starlink, df_debris)
-        run_physics_engine(high_risk_subset)
+        # If demo mode, they are very close, so set threshold high enough to catch all 100
+        run_physics_engine(high_risk_subset, threshold_km=50.0 if demo_mode else 20.0)

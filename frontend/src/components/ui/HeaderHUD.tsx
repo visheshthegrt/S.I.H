@@ -12,6 +12,7 @@ interface HeaderHUDProps {
   onResetTime: () => void;
   onRunAnalysis: () => void;
   onRunDemo: () => void;
+  onResetLive: () => void;
   isAnalyzing: boolean;
 }
 
@@ -24,6 +25,7 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
   onResetTime,
   onRunAnalysis,
   onRunDemo,
+  onResetLive,
   isAnalyzing
 }) => {
   return (
@@ -115,17 +117,31 @@ export const HeaderHUD: React.FC<HeaderHUDProps> = ({
 
       {/* Action Buttons */}
       <div className="ml-4 flex gap-2 pointer-events-auto">
-        <button
-          onClick={onRunDemo}
-          disabled={isAnalyzing}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs border transition-all shadow-lg ${
-            isAnalyzing 
-            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-not-allowed'
-            : 'bg-amber-600/80 hover:bg-amber-500 text-white border-amber-400/50 hover:shadow-glow-amber'
-          }`}
-        >
-          SIMULATE CRASH
-        </button>
+        {dbStatus.mode === 'database' ? (
+          <button
+            onClick={onResetLive}
+            disabled={isAnalyzing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs border transition-all shadow-lg ${
+              isAnalyzing 
+              ? 'bg-blue-500/20 text-blue-300 border-blue-500/30 cursor-not-allowed'
+              : 'bg-blue-600/80 hover:bg-blue-500 text-white border-blue-400/50 hover:shadow-glow-blue'
+            }`}
+          >
+            RETURN TO LIVE DATA
+          </button>
+        ) : (
+          <button
+            onClick={onRunDemo}
+            disabled={isAnalyzing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-xs border transition-all shadow-lg ${
+              isAnalyzing 
+              ? 'bg-amber-500/20 text-amber-300 border-amber-500/30 cursor-not-allowed'
+              : 'bg-amber-600/80 hover:bg-amber-500 text-white border-amber-400/50 hover:shadow-glow-amber'
+            }`}
+          >
+            SIMULATE CRASH
+          </button>
+        )}
 
         <button
           onClick={onRunAnalysis}

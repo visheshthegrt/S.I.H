@@ -1,28 +1,24 @@
 import pandas as pd
 import json
+import random
 
 def generate_demo_files():
-    # Base TLE for a Starlink
-    # 1 45177U 20001B   26042.40000000  .00010000  00000+0  10000-3 0  9990
-    # 2 45177  53.0500 120.0000 0001000  90.0000 270.0000 15.0600000012345
-    
     starlinks = []
     debris = []
     
     norad_id = 50000
     
-    # 50 Starlinks
+    # 50 Randomly scattered Starlinks
     for i in range(50):
         norad_id += 1
         name = f"DEMO-STARLINK-{norad_id}"
         
-        # Vary the RAAN to spread them around the Earth
-        raan = (i * (360/50)) % 360
-        raan_str = f"{raan:08.4f}"
-        mean_anomaly = 270.0000
+        # Randomize RAAN and Mean Anomaly for realistic scatter
+        raan = random.uniform(0, 360)
+        mean_anomaly = random.uniform(0, 360)
         
         line1 = f"1 {norad_id:05d}U 20001B   26042.40000000  .00010000  00000+0  10000-3 0  9990"
-        line2 = f"2 {norad_id:05d}  53.0500 {raan_str} 0001000  90.0000 {mean_anomaly:08.4f} 15.0600000012345"
+        line2 = f"2 {norad_id:05d}  53.0500 {raan:08.4f} 0001000  90.0000 {mean_anomaly:08.4f} 15.0600000012345"
         
         starlinks.append({
             "OBJECT_NAME": name,
@@ -34,26 +30,48 @@ def generate_demo_files():
             "TLE_LINE2": line2
         })
         
-        # 2 pieces of debris tailgating this exact Starlink
-        for j in range(2):
-            deb_norad = norad_id + 10000 + j
-            deb_name = f"DEMO-DEBRIS-{deb_norad}"
-            
-            # Offset mean anomaly slightly so it's a few kilometers away but on the exact same track
-            deb_mean_anomaly = mean_anomaly + (0.005 * (j+1))
-            
-            deb_line1 = f"1 {deb_norad:05d}U 20001B   26042.40000000  .00010000  00000+0  10000-3 0  9990"
-            deb_line2 = f"2 {deb_norad:05d}  53.0500 {raan_str} 0001000  90.0000 {deb_mean_anomaly:08.4f} 15.0600000012345"
-            
-            debris.append({
-                "OBJECT_NAME": deb_name,
-                "NORAD_CAT_ID": deb_norad,
-                "MEAN_MOTION": 15.06,
-                "ECCENTRICITY": 0.0001,
-                "INCLINATION": 53.05,
-                "TLE_LINE1": deb_line1,
-                "TLE_LINE2": deb_line2
-            })
+    # ONLY 1 piece of rigged debris on a direct collision course with the first Starlink
+    target_starlink = starlinks[0]
+    deb_norad = 60001
+    deb_name = "DEMO-DEBRIS-THREAT"
+    
+    # Same RAAN but slightly offset mean anomaly so it crashes in the near future
+    target_raan = float(target_starlink["TLE_LINE2"][17:25])
+    target_mean_anomaly = float(target_starlink["TLE_LINE2"][43:51])
+    deb_mean_anomaly = (target_mean_anomaly + 0.005) % 360
+    
+    deb_line1 = f"1 {deb_norad:05d}U 20001B   26042.40000000  .00010000  00000+0  10000-3 0  9990"
+    deb_line2 = f"2 {deb_norad:05d}  53.0500 {target_raan:08.4f} 0001000  90.0000 {deb_mean_anomaly:08.4f} 15.0600000012345"
+    
+    debris.append({
+        "OBJECT_NAME": deb_name,
+        "NORAD_CAT_ID": deb_norad,
+        "MEAN_MOTION": 15.06,
+        "ECCENTRICITY": 0.0001,
+        "INCLINATION": 53.05,
+        "TLE_LINE1": deb_line1,
+        "TLE_LINE2": deb_line2
+    })
+    
+    # 20 randomly scattered safe debris pieces for background noise
+    for i in range(20):
+        safe_deb_norad = 60002 + i
+        safe_deb_name = f"DEMO-DEBRIS-{safe_deb_norad}"
+        safe_raan = random.uniform(0, 360)
+        safe_mean_anomaly = random.uniform(0, 360)
+        
+        safe_line1 = f"1 {safe_deb_norad:05d}U 20001B   26042.40000000  .00010000  00000+0  10000-3 0  9990"
+        safe_line2 = f"2 {safe_deb_norad:05d}  53.0500 {safe_raan:08.4f} 0001000  90.0000 {safe_mean_anomaly:08.4f} 15.0600000012345"
+        
+        debris.append({
+            "OBJECT_NAME": safe_deb_name,
+            "NORAD_CAT_ID": safe_deb_norad,
+            "MEAN_MOTION": 15.06,
+            "ECCENTRICITY": 0.0001,
+            "INCLINATION": 53.05,
+            "TLE_LINE1": safe_line1,
+            "TLE_LINE2": safe_line2
+        })
             
     df_starlink = pd.DataFrame(starlinks)
     df_debris = pd.DataFrame(debris)

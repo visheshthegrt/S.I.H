@@ -617,12 +617,26 @@ export const CanvasContainer: React.FC<CanvasContainerProps> = ({
 
       const wireframeMat = new THREE.LineBasicMaterial({ color: 0xffffff });
 
-      collisionWarnings.forEach(warning => {
-        // Backend outputs in km. Scale to Three.js units (1000km = 1 unit)
-        // Note: Coordinates might be ECI vs ECEF, but for visual clustering this is sufficient.
-        const x = warning.obj1_x / 1000;
-        const y = warning.obj1_y / 1000;
-        const z = warning.obj1_z / 1000;
+      // Sort by distance and only take the top 5 closest approaches to prevent WebGL point light lag
+      const topWarnings = [...collisionWarnings].sort((a, b) => a.distance_km - b.distance_km).slice(0, 5);
+
+      topWarnings.forEach(warning => {
+        // Find the corresponding satellite object to get exact synced visual coordinates
+        const sat = satellitesRef.current.find(s => s.name === warning.object_1 || s.id === warning.object_1);
+        let x, y, z;
+        
+        if (sat) {
+          // If found, calculate its exact 3D position at the collision timestamp
+          const telemetry = getSatelliteTelemetry(sat, new Date(warning.timestamp));
+          x = telemetry.position3D[0];
+          y = telemetry.position3D[1];
+          z = telemetry.position3D[2];
+        } else {
+          // Fallback to raw backend ECI coordinates if not found
+          x = warning.obj1_x / 1000;
+          y = warning.obj1_y / 1000;
+          z = warning.obj1_z / 1000;
+        }
 
         const mesh = new THREE.Mesh(markerGeo, markerMat);
         mesh.position.set(x, y, z);

@@ -10,7 +10,7 @@ import { SatelliteInfoPanel } from './components/ui/SatelliteInfoPanel';
 import { TimeControls } from './components/ui/TimeControls';
 import { CameraModeSelector } from './components/ui/CameraModeSelector';
 import { HoverTooltip } from './components/ui/HoverTooltip';
-import { getCollisionWarnings, runCollisionAnalysis, runDemoSimulation, CollisionWarning } from './api/collisionApi';
+import { getCollisionWarnings, runCollisionAnalysis, runDemoSimulation, resetLiveMode, CollisionWarning } from './api/collisionApi';
 
 export function App() {
   const [satellites, setSatellites] = useState<SatelliteRecord[]>(FULL_SATELLITE_CATALOG);
@@ -69,13 +69,20 @@ export function App() {
     setIsAnalyzing(true);
     try {
       await runCollisionAnalysis();
-      // It's running in background. Let's poll aggressively for the next 30s
+      // It's running in background. Let's poll aggressively for the next 90s
       let polls = 0;
       const pollInterval = setInterval(async () => {
         polls++;
         const warnings = await getCollisionWarnings();
-        setCollisionWarnings(warnings);
-        if (polls > 10) {
+        // If we found warnings, we can stop polling early
+        if (warnings.length > 0) {
+          setCollisionWarnings(warnings);
+          clearInterval(pollInterval);
+          setIsAnalyzing(false);
+          return;
+        }
+        
+        if (polls > 30) {
           clearInterval(pollInterval);
           setIsAnalyzing(false);
         }
@@ -98,12 +105,32 @@ export function App() {
       const pollInterval = setInterval(async () => {
         polls++;
         const warnings = await getCollisionWarnings();
-        setCollisionWarnings(warnings);
-        if (polls > 10) {
+        if (warnings.length > 0) {
+          setCollisionWarnings(warnings);
+          clearInterval(pollInterval);
+          setIsAnalyzing(false);
+          return;
+        }
+        
+        if (polls > 30) {
           clearInterval(pollInterval);
           setIsAnalyzing(false);
         }
       }, 3000);
+    } catch (e) {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleResetLive = async () => {
+    setIsAnalyzing(true);
+    try {
+      await resetLiveMode();
+      const res = await fetchSatellitesFromDatabase();
+      setSatellites(res.satellites);
+      setDbStatus(res.status);
+      setCollisionWarnings([]);
+      setIsAnalyzing(false);
     } catch (e) {
       setIsAnalyzing(false);
     }
@@ -165,6 +192,7 @@ export function App() {
         onResetTime={handleResetTime}
         onRunAnalysis={handleRunAnalysis}
         onRunDemo={handleRunDemo}
+        onResetLive={handleResetLive}
         isAnalyzing={isAnalyzing}
       />
 

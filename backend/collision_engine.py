@@ -111,9 +111,13 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
 
     for index, row in high_risk_objects.iterrows():
         try:
-            sat = EarthSatellite.from_omm(ts, row.to_dict())
+            name = row.get('OBJECT_NAME', 'UNKNOWN')
+            if 'TLE_LINE1' in row and 'TLE_LINE2' in row and pd.notna(row['TLE_LINE1']):
+                sat = EarthSatellite(row['TLE_LINE1'], row['TLE_LINE2'], name, ts)
+            else:
+                sat = EarthSatellite.from_omm(ts, row.to_dict())
             satellites.append(sat)
-            names.append(row['OBJECT_NAME'])
+            names.append(name)
         except Exception as e:
             print(f"Failed to load satellite {row.get('OBJECT_NAME', 'UNKNOWN')}: {e}")
             continue
@@ -127,6 +131,7 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
 
     current_time = datetime.datetime.now(datetime.timezone.utc)
     collision_events = []
+    seen_pairs = set()
 
     for minute_offset in range(forecast_minutes):
         future_time = current_time + datetime.timedelta(minutes=minute_offset)
@@ -142,18 +147,21 @@ def run_physics_engine(high_risk_objects, output_path="collision_warnings.json",
         
         for i, j in zip(close_pairs[0], close_pairs[1]):
             if i < j: 
-                event = {
-                    "timestamp": future_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    "object_1": names[i],
-                    "object_2": names[j],
-                    "distance_km": round(dist_matrix[i, j], 2),
-                    "obj1_x": coords_array[i][0], "obj1_y": coords_array[i][1], "obj1_z": coords_array[i][2],
-                    "obj2_x": coords_array[j][0], "obj2_y": coords_array[j][1], "obj2_z": coords_array[j][2],
-                    "risk_level": "HIGH" if dist_matrix[i, j] < 10.0 else "MEDIUM",
-                    "event_type": "CLOSE APPROACH"
-                }
-                collision_events.append(event)
-                print(f"⚠️ RISK: {names[i]} vs {names[j]} at {future_time.strftime('%H:%M')} (Distance: {dist_matrix[i,j]:.2f} km)")
+                pair_id = f"{names[i]}-{names[j]}"
+                if pair_id not in seen_pairs:
+                    seen_pairs.add(pair_id)
+                    event = {
+                        "timestamp": future_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "object_1": names[i],
+                        "object_2": names[j],
+                        "distance_km": round(dist_matrix[i, j], 2),
+                        "obj1_x": coords_array[i][0], "obj1_y": coords_array[i][1], "obj1_z": coords_array[i][2],
+                        "obj2_x": coords_array[j][0], "obj2_y": coords_array[j][1], "obj2_z": coords_array[j][2],
+                        "risk_level": "HIGH" if dist_matrix[i, j] < 10.0 else "MEDIUM",
+                        "event_type": "CLOSE APPROACH"
+                    }
+                    collision_events.append(event)
+                    print(f"[RISK ALERT] {names[i]} vs {names[j]} at {future_time.strftime('%H:%M')} (Distance: {dist_matrix[i,j]:.2f} km)")
 
     with open(output_path, 'w') as f:
         json.dump(collision_events, f, indent=4)

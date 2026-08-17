@@ -57,3 +57,18 @@ export async function runDemoSimulation(): Promise<{ message: string }> {
     throw error;
   }
 }
+
+export async function resetLiveMode(): Promise<{ message: string }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/reset-live`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to trigger reset live mode:', error);
+    throw error;
+  }
+}

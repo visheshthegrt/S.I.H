@@ -74,3 +74,10 @@ def trigger_demo_analysis(background_tasks: BackgroundTasks):
     """Triggers the rigged Hollywood Demo simulation."""
     background_tasks.add_task(run_engine_task, True)
     return {"message": "Hollywood Demo triggered and is running in the background."}
+
+@app.post("/reset-live")
+def reset_live():
+    """Resets the system back to live Celestrak mode."""
+    global is_demo_mode
+    is_demo_mode = False
+    return {"message": "Switched back to live Celestrak mode."}
